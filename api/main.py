@@ -13,7 +13,6 @@ import hashlib
 import time
 import json
 
-# Настройка логирования - только ошибки от библиотек
 logging.basicConfig(
     level=logging.WARNING,
     format='%(message)s'
@@ -23,7 +22,6 @@ logger.setLevel(logging.INFO)
 
 app = FastAPI(title="ECHO", version="1.0.0", docs_url=None, redoc_url=None)
 
-# CORS для dashboard
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,7 +36,6 @@ async def startup_event():
     import os
     import urllib.request
     
-    # Красивый баннер
     print("\n" + "=" * 70)
     print("███████╗ ██████╗██╗  ██╗ ██████╗ ")
     print("██╔════╝██╔════╝██║  ██║██╔═══██╗")
@@ -54,7 +51,6 @@ async def startup_event():
     print("=" * 70)
     print("")
     
-    # Загрузка без лишних логов
     import logging
     logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
     
@@ -63,13 +59,11 @@ async def startup_event():
     print("[+] Модель загружена")
     print("")
     
-    # Загружаем Faiss индекс из Redis
     print("[*] Загрузка Faiss индекса...")
     cache_service._load_faiss_index()
     print("[+] Faiss индекс загружен")
     print("")
     
-    # Определяем внешний IP
     server_ip = os.getenv('SERVER_IP')
     if not server_ip:
         try:
@@ -77,7 +71,6 @@ async def startup_event():
         except:
             server_ip = None
     
-    # Проверяем setup
     setup_completed = cache_service.redis_client.get("setup_completed")
     
     if not setup_completed:
@@ -104,7 +97,6 @@ async def startup_event():
 @app.get("/")
 async def root(request: Request):
     """Redirect to dashboard or setup"""
-    # Проверяем, завершена ли настройка
     try:
         setup_completed = cache_service.redis_client.get("setup_completed")
         if not setup_completed:
@@ -115,19 +107,16 @@ async def root(request: Request):
     except:
         pass
     
-    # Проверяем авторизацию
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.replace("Bearer ", "")
         session = cache_service.redis_client.get(f"session:{token}")
         if session:
-            # Авторизован - показываем dashboard
             dashboard_path = Path("/app/dashboard.html")
             if dashboard_path.exists():
                 with open(dashboard_path, "r") as f:
                     return HTMLResponse(content=f.read())
     
-    # Не авторизован - редирект на login
     return HTMLResponse(content="""
         <script>
             const token = localStorage.getItem('auth_token');
@@ -150,14 +139,12 @@ async def setup(request: Request):
     """Первоначальная настройка"""
     body = await request.json()
     
-    # Нормализуем URL (убираем /chat/completions если есть)
     upstream_url = body.get("upstream_api_url", settings.upstream_api_url)
     if upstream_url.endswith("/chat/completions"):
         upstream_url = upstream_url[:-len("/chat/completions")]
     if upstream_url.endswith("/completions"):
         upstream_url = upstream_url[:-len("/completions")]
     
-    # Сохраняем настройки API
     settings.upstream_api_url = upstream_url
     settings.upstream_api_key = body.get("upstream_api_key", "")
     settings.cache_threshold = float(body.get("cache_threshold", 0.88))
@@ -165,7 +152,6 @@ async def setup(request: Request):
     settings.enable_semantic = bool(body.get("enable_semantic", True))
     settings.save_to_redis()
     
-    # Сохраняем логин/пароль
     import hashlib
     username = body.get("username", "admin")
     password = body.get("password", "")
@@ -193,17 +179,15 @@ async def login(request: Request):
     username = body.get("username", "")
     password = body.get("password", "")
     
-    # Проверяем логин/пароль
     import hashlib
     stored_username = cache_service.redis_client.get("auth_username")
     stored_password = cache_service.redis_client.get("auth_password")
     password_hash = hashlib.sha256(password.encode()).hexdigest()
     
     if username == stored_username and password_hash == stored_password:
-        # Генерируем простой токен
         import secrets
         token = secrets.token_urlsafe(32)
-        cache_service.redis_client.setex(f"session:{token}", 86400, username)  # 24 часа
+        cache_service.redis_client.setex(f"session:{token}", 86400, username)
         return {"token": token, "message": "Login successful"}
     
     return JSONResponse(status_code=401, content={"message": "Неверный логин или пароль"})
@@ -238,7 +222,6 @@ async def get_stats(request: Request):
     """Статистика кеша"""
     check_auth(request)
     stats = cache_service.get_stats()
-    # Добавляем Redis info
     try:
         info = cache_service.redis_client.info('keyspace')
         db_info = info.get('db0', {})
@@ -298,13 +281,10 @@ def _construct_stream_from_cache(content: str, model: str):
     created = int(time.time())
     chunk_id = f"chatcmpl-{hashlib.md5(content.encode()).hexdigest()[:8]}"
     
-    # Chunk 1: role
     yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': created, 'model': model, 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}]})}\n\n"
     
-    # Chunk 2: content
     yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': created, 'model': model, 'choices': [{'index': 0, 'delta': {'content': content}, 'finish_reason': None}]})}\n\n"
     
-    # Chunk 3: done
     yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': created, 'model': model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\n\n"
     
     yield "data: [DONE]\n\n"
@@ -320,7 +300,6 @@ async def chat_completions(request: Request):
         cache_service.stats["total_requests"] += 1
         cache_service._save_stats()
         
-        # Проверяем, нужно ли кешировать этот запрос
         should_cache = cache_service._should_cache(body)
         
         if not should_cache:
@@ -328,7 +307,6 @@ async def chat_completions(request: Request):
             cache_service.stats["cache_misses"] += 1
             cache_service._save_stats()
         else:
-            # Проверка exact match
             cached_response = cache_service.get_exact_match(messages)
             if cached_response:
                 cache_service.stats["cache_hits"] += 1
@@ -337,7 +315,6 @@ async def chat_completions(request: Request):
                 cache_service._save_stats()
                 logger.info(f"Cache HIT (exact) - saved {tokens} tokens")
                 
-                # Если запрашивают stream - возвращаем stream из кеша
                 if is_stream:
                     content = cached_response['choices'][0]['message']['content']
                     model = cached_response.get('model', body.get('model', 'gpt-3.5-turbo'))
@@ -345,7 +322,6 @@ async def chat_completions(request: Request):
                 
                 return JSONResponse(content=cached_response)
             
-            # Проверка semantic match
             if messages:
                 user_content = cache_service._extract_user_content(messages)
                 if user_content:
@@ -358,7 +334,6 @@ async def chat_completions(request: Request):
                         cache_service._save_stats()
                         logger.info(f"Cache HIT (semantic) - saved {tokens} tokens")
                         
-                        # Если запрашивают stream - возвращаем stream из кеша
                         if is_stream:
                             content = cached_response['choices'][0]['message']['content']
                             model = cached_response.get('model', body.get('model', 'gpt-3.5-turbo'))
@@ -368,28 +343,23 @@ async def chat_completions(request: Request):
                     else:
                         logger.info(f"Semantic search: no match found (threshold: {settings.cache_threshold})")
             
-            # Cache miss
             cache_service.stats["cache_misses"] += 1
             cache_service._save_stats()
             logger.info("Cache MISS - forwarding to upstream API")
         
-        # Получаем Authorization header
         auth_header = request.headers.get("Authorization")
         if not auth_header:
             raise HTTPException(status_code=401, detail="Authorization header required")
         
-        # Прокси запрос
         async with httpx.AsyncClient(timeout=60.0) as client:
             upstream_url = f"{settings.upstream_api_url}/chat/completions"
             
             if is_stream:
-                # Streaming: собираем весь ответ, кешируем, возвращаем stream
                 logger.info("Streaming request - will collect and cache")
                 
                 full_content = ""
                 chunks_buffer = []
                 
-                # Сначала получаем весь stream
                 async with client.stream(
                     "POST",
                     upstream_url,
@@ -407,7 +377,6 @@ async def chat_completions(request: Request):
                         if chunk.strip():
                             chunks_buffer.append(chunk)
                             
-                            # Парсим для кеша
                             for line in chunk.split('\n'):
                                 if line.startswith('data: '):
                                     data_str = line[6:]
@@ -422,7 +391,6 @@ async def chat_completions(request: Request):
                                     except:
                                         pass
                 
-                # Кешируем
                 if should_cache and full_content:
                     response_data = {
                         "id": f"chatcmpl-{hashlib.md5(full_content.encode()).hexdigest()[:8]}",
@@ -446,7 +414,6 @@ async def chat_completions(request: Request):
                     cache_service.set_cache(messages, response_data)
                     logger.info(f"Cached streaming response: {len(full_content)} chars")
                 
-                # Возвращаем stream
                 async def replay_stream():
                     for chunk in chunks_buffer:
                         yield chunk
@@ -454,7 +421,6 @@ async def chat_completions(request: Request):
                 return StreamingResponse(replay_stream(), media_type="text/event-stream")
             
             else:
-                # Non-streaming: как обычно
                 response = await client.post(
                     upstream_url,
                     json=body,
@@ -470,7 +436,6 @@ async def chat_completions(request: Request):
                 
                 response_data = response.json()
                 
-                # Сохраняем в кеш только если should_cache
                 if should_cache:
                     cache_service.set_cache(messages, response_data)
                 

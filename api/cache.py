@@ -20,17 +20,12 @@ class CacheService:
             port=settings.redis_port,
             decode_responses=True
         )
-        # Загружаем статистику из Redis
         self._load_stats()
-        # Faiss загружается в startup event после инициализации всего
     
     def _normalize_text(self, text: str) -> str:
         """Нормализация текста для лучшего кеширования"""
-        # Lowercase
         text = text.lower()
-        # Убираем лишние пробелы
         text = re.sub(r'\s+', ' ', text).strip()
-        # Убираем пунктуацию в конце
         text = text.rstrip('.,!?;:')
         return text
     
@@ -45,16 +40,11 @@ class CacheService:
     
     def _should_cache(self, request_data: Dict) -> bool:
         """Проверяет, нужно ли кешировать запрос"""
-        # Не кешируем если temperature > 1.0 (креативные запросы)
         temperature = request_data.get('temperature', 0.0)
         if temperature > 1.0:
             return False
         
-        # Streaming кешируем, но возвращаем как non-stream
-        # if request_data.get('stream', False):
-        #     return False
         
-        # Не кешируем function calling
         if 'functions' in request_data or 'tools' in request_data:
             return False
         
@@ -80,12 +70,10 @@ class CacheService:
     def _load_faiss_index(self):
         """Загрузка существующих эмбеддингов в Faiss индекс"""
         try:
-            # Проверяем есть ли сохраненный индекс
             if os.path.isfile(faiss_service.index_path):
                 logger.info(f"Loading Faiss index from {faiss_service.index_path}")
                 faiss_service.index = faiss.read_index(faiss_service.index_path)
                 
-                # Восстанавливаем маппинг hash_to_id из Redis
                 cursor = 0
                 faiss_id = 0
                 while True:
@@ -100,7 +88,6 @@ class CacheService:
                 logger.info(f"Loaded Faiss index with {faiss_service.index.ntotal} vectors from file")
                 return
             
-            # Если файла нет - загружаем из Redis
             logger.info("Loading embeddings into Faiss index from Redis...")
             cursor = 0
             count = 0
@@ -124,7 +111,6 @@ class CacheService:
             
             logger.info(f"Loaded {count} embeddings into Faiss index from Redis")
             
-            # Сохраняем индекс на диск
             if count > 0:
                 faiss_service.flush()
                 logger.info("Faiss index saved to disk")
@@ -133,7 +119,6 @@ class CacheService:
     
     def _get_cache_key(self, messages: list) -> str:
         """Генерация ключа для exact match на основе нормализованного контента"""
-        # Используем нормализованный user content
         normalized_content = self._extract_user_content(messages)
         return f"exact:{hashlib.md5(normalized_content.encode()).hexdigest()}"
     
@@ -146,7 +131,6 @@ class CacheService:
         key = self._get_cache_key(messages)
         cached = self.redis_client.get(key)
         if cached:
-            # Обновляем TTL при использовании
             self.redis_client.expire(key, settings.cache_ttl)
             return json.loads(cached)
         return None
@@ -154,12 +138,10 @@ class CacheService:
     def _check_cache_health(self, emb_key: str, response_key: str) -> bool:
         """Проверка консистентности кеша"""
         try:
-            # Проверяем что оба ключа существуют
             emb_exists = self.redis_client.exists(emb_key)
             response_exists = self.redis_client.exists(response_key)
             
             if not emb_exists or not response_exists:
-                # Удаляем битые записи
                 if emb_exists:
                     self.redis_client.delete(emb_key)
                 if response_exists:
@@ -175,20 +157,16 @@ class CacheService:
         if not settings.enable_semantic:
             return None
         
-        # Нормализуем запрос
         normalized_query = self._normalize_text(query)
         
-        # Получаем embedding запроса
         query_emb = embedding_service.get_embedding(normalized_query)
         
-        # Поиск через Faiss (в 1000x быстрее чем Redis SCAN)
         faiss_results = faiss_service.search(query_emb, k=top_k * 2)
         
         if not faiss_results:
             logger.info(f"No semantic matches found (threshold: {settings.cache_threshold})")
             return None
         
-        # Проверяем результаты и фильтруем по threshold
         candidates = []
         for emb_key, similarity in faiss_results:
             logger.debug(f"Faiss candidate: {emb_key}, similarity: {similarity:.4f}")
@@ -197,7 +175,6 @@ class CacheService:
                 logger.debug(f"Filtered out: {similarity:.4f} < {settings.cache_threshold}")
                 continue
             
-            # Получаем данные из Redis
             stored_data = self.redis_client.get(emb_key)
             if not stored_data:
                 continue
@@ -206,7 +183,6 @@ class CacheService:
                 data = json.loads(stored_data)
                 response_key = data["response_key"]
                 
-                # Health check
                 if not self._check_cache_health(emb_key, response_key):
                     continue
                 
@@ -227,11 +203,9 @@ class CacheService:
             logger.info(f"No valid candidates after filtering (threshold: {settings.cache_threshold})")
             return None
         
-        # Сортируем по similarity
         candidates.sort(key=lambda x: x['similarity'], reverse=True)
         candidates = candidates[:top_k]
         
-        # Temperature softmax для выбора
         if temperature > 0 and len(candidates) > 1:
             scores = np.array([c['similarity'] for c in candidates])
             exp_scores = np.exp(scores / temperature)
@@ -241,7 +215,6 @@ class CacheService:
         else:
             chosen = candidates[0]
         
-        # Обновляем TTL
         self.redis_client.expire(chosen['response_key'], settings.cache_ttl)
         self.redis_client.expire(chosen['emb_key'], settings.cache_ttl)
         
@@ -251,7 +224,6 @@ class CacheService:
     
     def set_cache(self, messages: list, response: Dict[Any, Any]):
         """Сохранение в кеш с нормализацией"""
-        # Exact match
         exact_key = self._get_cache_key(messages)
         self.redis_client.setex(
             exact_key,
@@ -259,9 +231,7 @@ class CacheService:
             json.dumps(response)
         )
         
-        # Semantic cache
         if settings.enable_semantic and messages:
-            # Извлекаем и нормализуем user content
             user_content = self._extract_user_content(messages)
             if user_content:
                 query_emb = embedding_service.get_embedding(user_content)
@@ -273,17 +243,15 @@ class CacheService:
                     "query": user_content
                 }
                 
-                # Сохраняем в Redis
                 self.redis_client.setex(
                     emb_key,
                     settings.cache_ttl,
                     json.dumps(emb_data)
                 )
                 
-                # Добавляем в Faiss индекс
                 try:
                     faiss_service.add(emb_key, query_emb)
-                    faiss_service.flush()  # Сохраняем после каждого добавления
+                    faiss_service.flush()
                     logger.debug(f"Added to Faiss: {emb_key}")
                 except Exception as e:
                     logger.error(f"Failed to add to Faiss: {e}")
@@ -309,7 +277,6 @@ class CacheService:
     
     def cleanup_faiss(self):
         """Очистка удаленных векторов из Faiss"""
-        # Получаем все ключи из Redis
         redis_keys = set()
         cursor = 0
         while True:
@@ -318,7 +285,6 @@ class CacheService:
             if cursor == 0:
                 break
         
-        # Удаляем из Faiss то, чего нет в Redis
         faiss_keys = set(faiss_service.hash_to_id.keys())
         to_remove = faiss_keys - redis_keys
         
