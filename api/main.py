@@ -243,12 +243,29 @@ async def update_config(request: Request):
         "enable_semantic": settings.enable_semantic
     }}
 
+def _construct_stream_from_cache(content: str, model: str):
+    """Создает SSE stream из кешированного контента"""
+    created = int(time.time())
+    chunk_id = f"chatcmpl-{hashlib.md5(content.encode()).hexdigest()[:8]}"
+    
+    # Chunk 1: role
+    yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': created, 'model': model, 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}]})}\n\n"
+    
+    # Chunk 2: content
+    yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': created, 'model': model, 'choices': [{'index': 0, 'delta': {'content': content}, 'finish_reason': None}]})}\n\n"
+    
+    # Chunk 3: done
+    yield f"data: {json.dumps({'id': chunk_id, 'object': 'chat.completion.chunk', 'created': created, 'model': model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})}\n\n"
+    
+    yield "data: [DONE]\n\n"
+
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     """Основной эндпоинт - прокси с кешированием"""
     try:
         body = await request.json()
         messages = body.get("messages", [])
+        is_stream = body.get('stream', False)
         
         cache_service.stats["total_requests"] += 1
         cache_service._save_stats()
@@ -257,8 +274,7 @@ async def chat_completions(request: Request):
         should_cache = cache_service._should_cache(body)
         
         if not should_cache:
-            logger.info(f"Cache SKIP - temperature={body.get('temperature', 0.0)}, stream={body.get('stream', False)}")
-            # Пропускаем кеш, сразу идем к API
+            logger.info(f"Cache SKIP - temperature={body.get('temperature', 0.0)}, stream={is_stream}")
             cache_service.stats["cache_misses"] += 1
             cache_service._save_stats()
         else:
@@ -270,6 +286,13 @@ async def chat_completions(request: Request):
                 cache_service.stats["tokens_saved"] += tokens
                 cache_service._save_stats()
                 logger.info(f"Cache HIT (exact) - saved {tokens} tokens")
+                
+                # Если запрашивают stream - возвращаем stream из кеша
+                if is_stream:
+                    content = cached_response['choices'][0]['message']['content']
+                    model = cached_response.get('model', body.get('model', 'gpt-3.5-turbo'))
+                    return StreamingResponse(_construct_stream_from_cache(content, model), media_type="text/event-stream")
+                
                 return JSONResponse(content=cached_response)
             
             # Проверка semantic match
@@ -284,6 +307,13 @@ async def chat_completions(request: Request):
                         cache_service.stats["tokens_saved"] += tokens
                         cache_service._save_stats()
                         logger.info(f"Cache HIT (semantic) - saved {tokens} tokens")
+                        
+                        # Если запрашивают stream - возвращаем stream из кеша
+                        if is_stream:
+                            content = cached_response['choices'][0]['message']['content']
+                            model = cached_response.get('model', body.get('model', 'gpt-3.5-turbo'))
+                            return StreamingResponse(_construct_stream_from_cache(content, model), media_type="text/event-stream")
+                        
                         return JSONResponse(content=cached_response)
                     else:
                         logger.info(f"Semantic search: no match found (threshold: {settings.cache_threshold})")
@@ -298,18 +328,18 @@ async def chat_completions(request: Request):
         if not auth_header:
             raise HTTPException(status_code=401, detail="Authorization header required")
         
-        # Проверяем streaming
-        is_stream = body.get('stream', False)
-        
         # Прокси запрос
         async with httpx.AsyncClient(timeout=60.0) as client:
             upstream_url = f"{settings.upstream_api_url}/chat/completions"
             
             if is_stream:
-                # Streaming: собираем весь ответ, кешируем, возвращаем non-stream
+                # Streaming: собираем весь ответ, кешируем, возвращаем stream
                 logger.info("Streaming request - will collect and cache")
                 
-                # Отправляем как stream к upstream
+                full_content = ""
+                chunks_buffer = []
+                
+                # Сначала получаем весь stream
                 async with client.stream(
                     "POST",
                     upstream_url,
@@ -323,11 +353,11 @@ async def chat_completions(request: Request):
                         logger.error(f"Upstream API error: {stream_response.status_code}")
                         raise HTTPException(status_code=stream_response.status_code, detail="Upstream error")
                     
-                    # Собираем все chunks
-                    full_content = ""
                     async for chunk in stream_response.aiter_text():
                         if chunk.strip():
-                            # Парсим SSE
+                            chunks_buffer.append(chunk)
+                            
+                            # Парсим для кеша
                             for line in chunk.split('\n'):
                                 if line.startswith('data: '):
                                     data_str = line[6:]
@@ -340,9 +370,10 @@ async def chat_completions(request: Request):
                                         if content:
                                             full_content += content
                                     except:
-                                        continue
-                    
-                    # Создаем non-stream ответ
+                                        pass
+                
+                # Кешируем
+                if should_cache and full_content:
                     response_data = {
                         "id": f"chatcmpl-{hashlib.md5(full_content.encode()).hexdigest()[:8]}",
                         "object": "chat.completion",
@@ -362,13 +393,15 @@ async def chat_completions(request: Request):
                             "total_tokens": len(full_content.split())
                         }
                     }
-                    
-                    # Кешируем
-                    if should_cache:
-                        cache_service.set_cache(messages, response_data)
-                        logger.info(f"Cached streaming response: {len(full_content)} chars")
-                    
-                    return JSONResponse(content=response_data)
+                    cache_service.set_cache(messages, response_data)
+                    logger.info(f"Cached streaming response: {len(full_content)} chars")
+                
+                # Возвращаем stream
+                async def replay_stream():
+                    for chunk in chunks_buffer:
+                        yield chunk
+                
+                return StreamingResponse(replay_stream(), media_type="text/event-stream")
             
             else:
                 # Non-streaming: как обычно
