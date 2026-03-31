@@ -2,30 +2,23 @@ version: '3.8'
 
 services:
   api:
-    build: ./api
-    container_name: ai-cache-api
+    image: trovutech/echo:latest
+    container_name: echo-api
     ports:
       - "8000:8000"
-    env_file:
-      - .env
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - SERVER_IP=${SERVER_IP:-your-server-ip}
+      - SERVER_IP=${SERVER_IP:-}
     depends_on:
       - redis
     restart: unless-stopped
     volumes:
-      - ./api:/app
-      - ./dashboard.html:/app/dashboard.html
-      - ./setup.html:/app/setup.html
-      - ./login.html:/app/login.html
-      - model-cache:/root/.cache
       - faiss-data:/app/data
 
   redis:
     image: redis:7-alpine
-    container_name: ai-cache-redis
+    container_name: echo-redis
     ports:
       - "6379:6379"
     volumes:
@@ -40,5 +33,4 @@ services:
 
 volumes:
   redis-data:
-  model-cache:
   faiss-data:
