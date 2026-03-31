@@ -138,7 +138,10 @@ async def root(request: Request):
 
 @app.post("/setup")
 async def setup(request: Request):
-    """Первоначальная настройка"""
+    setup_completed = cache_service.redis_client.get("setup_completed")
+    if setup_completed:
+        raise HTTPException(status_code=403, detail="Setup already completed")
+    
     body = await request.json()
     
     upstream_url = body.get("upstream_api_url", settings.upstream_api_url)
