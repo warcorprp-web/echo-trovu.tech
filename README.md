@@ -33,7 +33,7 @@ Self-hosted прокси-кеш для OpenAI-совместимых API с се
 
 ```bash
 # Скачайте конфигурацию
-wget https://raw.githubusercontent.com/warcorprp-web/echo-trovu.tech/main/docker-compose.prod.yml -O docker-compose.yml
+wget https://raw.githubusercontent.com/warcorprp-web/echo-trovu.tech/main/docker-compose.yml
 
 # Запустите (с выводом логов)
 docker compose up
