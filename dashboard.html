@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECHO — trovu.tech</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path fill='%23de610d' d='M30.47 18.28V7.62h-1.52v9.14h-1.52v-1.52H25.9v12.19h1.53V25.9h3.04v-1.52H32v-6.1zm-6.09-6.09h1.52v3.05h-1.52ZM6.09 27.43v1.52h1.53v1.53h1.52v-1.53h13.71v1.53h1.53v-1.53h1.52v-1.52zm16.76-9.15h1.53v3.05h-1.53Zm0-7.61h1.53v1.52h-1.53Zm-3.04 6.09h3.04v1.52h-3.04ZM9.14 30.48h13.71V32H9.14Zm10.67-9.15h3.04v1.53h-3.04Zm-1.53-3.05h1.53v3.05h-1.53Zm0-16.76h1.53v1.53h-1.53Zm-4.57 22.86h4.57v1.52h-4.57Zm0-24.38h4.57v1.52h-4.57Zm-1.52 18.28h1.52v3.05h-1.52Zm0-16.76h1.52v1.53h-1.52ZM9.14 16.76h3.05v1.52H9.14Zm13.71-6.09V9.14h-6.09V4.57h1.52V3.05h-4.57v1.52h1.52v4.57H9.14v1.53z'/><path fill='%23de610d' d='M9.14 21.33h3.05v1.53H9.14Zm-1.52-3.05h1.52v3.05H7.62Zm0-7.61h1.52v1.52H7.62Zm-1.53 1.52h1.53v3.05H6.09Zm0 3.05H4.57v1.52H3.04V7.62H1.52v10.66H0v6.1h1.52v1.52h3.05v1.53h1.52z'/></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://code.iconify.design/3/3.1.0/iconify.min.js"></script>
+    <style>
+        @font-face {
+            font-family: 'VCR OSD Mono';
+            src: url('https://trovu.tech/VCROSDMono[NolivantNTEdit]-Regular.ttf') format('truetype');
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Manrope', sans-serif;
+            background: #f2f2ed;
+            color: #000;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+        
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        header { margin-bottom: 2rem; padding-bottom: 1.5rem; }
+        
+        h1 {
+            font-family: 'VCR OSD Mono', monospace;
+            font-size: 2.5rem;
+            font-weight: 400;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle { color: rgba(0, 0, 0, 0.7); font-size: 1.125rem; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card { background: #fff; border-radius: 24px; padding: 2rem; }
+        
+        .stat-label {
+            color: rgba(0, 0, 0, 0.7);
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+        
+        .stat-value {
+            font-family: 'VCR OSD Mono', monospace;
+            font-size: 2.5rem;
+            font-weight: 400;
+            line-height: 1;
+        }
+        
+        .stat-value.accent { color: #de610d; }
+        
+        .chart-container { background: #fff; border-radius: 24px; padding: 2rem; margin-bottom: 2rem; }
+        
+        .chart-title {
+            font-family: 'VCR OSD Mono', monospace;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #f2f2ed;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.75rem;
+        }
+        
+        .progress-fill { height: 100%; background: #de610d; transition: width 0.5s ease; }
+        
+        .actions {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        button {
+            font-family: 'VCR OSD Mono', monospace;
+            padding: 0.75rem 1.5rem;
+            border-radius: 24px;
+            border: 2px solid #de610d;
+            background: transparent;
+            color: #000;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        button:hover { background: #de610d; color: #fff; }
+        
+        .btn-danger { border-color: #000; }
+        .btn-danger:hover { background: #000; color: #fff; }
+        
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 24px;
+            background: #fff;
+            font-family: 'VCR OSD Mono', monospace;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #de610d;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            background: #f2f2ed;
+            border-radius: 16px;
+        }
+        
+        .info-label { color: rgba(0, 0, 0, 0.7); font-weight: 600; font-size: 0.875rem; }
+        .info-value { font-family: 'VCR OSD Mono', monospace; font-size: 1.125rem; }
+        
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal {
+            background: #fff;
+            border-radius: 24px;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+        
+        .modal-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        .modal-title {
+            font-family: 'VCR OSD Mono', monospace;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .modal-text {
+            margin-bottom: 1.5rem;
+            color: rgba(0, 0, 0, 0.7);
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+        
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            h1 { font-size: 1.75rem; }
+            .stat-value { font-size: 2rem; }
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span class="iconify" data-icon="streamline-pixel:technology-robot-ai" style="color: #de610d; font-size: 2rem;"></span>
+                    <div style="font-family: 'VCR OSD Mono', monospace; font-size: 1.25rem; color: #000;">
+                        trovu<span style="color: #de610d;">.tech</span>
+                    </div>
+                </div>
+                <div class="status">
+                    <span class="status-dot"></span>
+                    <span id="status">Подключено</span>
+                </div>
+            </div>
+            <h1>ECHO</h1>
+            <p class="subtitle">Кеширование AI-запросов в реальном времени</p>
+        </header>
+        
+        <div class="actions">
+            <button onclick="refreshStats()">
+                <span class="iconify" data-icon="pixelarticons:reload"></span>
+                Обновить
+            </button>
+            <button class="btn-danger" onclick="clearCache()">
+                <span class="iconify" data-icon="pixelarticons:trash"></span>
+                Очистить кеш
+            </button>
+        </div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Всего запросов</div>
+                <div class="stat-value" id="total-requests">0</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Попаданий в кеш</div>
+                <div class="stat-value accent" id="hit-rate">0%</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="hit-rate-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Токенов сэкономлено</div>
+                <div class="stat-value" id="tokens-saved">0</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Экономия</div>
+                <div class="stat-value accent" id="savings">$0.00</div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h3 class="chart-title" onclick="toggleSection('perf')" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                <span>Производительность кеша</span>
+                <span class="iconify" data-icon="pixelarticons:chevron-right" id="perf-icon" style="transition: transform 0.2s;"></span>
+            </h3>
+            <div class="info-grid" id="perf-content" style="display: none; margin-top: 1rem;">
+                <div class="info-item">
+                    <span class="info-label">Попадания</span>
+                    <span class="info-value" id="cache-hits">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Промахи</span>
+                    <span class="info-value" id="cache-misses">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Средний размер</span>
+                    <span class="info-value" id="avg-tokens">0 токенов</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Прогноз на месяц</span>
+                    <span class="info-value" id="monthly-savings">$0.00</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h3 class="chart-title" onclick="toggleSection('redis')" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                <span>Redis</span>
+                <span class="iconify" data-icon="pixelarticons:chevron-right" id="redis-icon" style="transition: transform 0.2s;"></span>
+            </h3>
+            <div class="info-grid" id="redis-content" style="display: none; margin-top: 1rem;">
+                <div class="info-item">
+                    <span class="info-label">Ключей в базе</span>
+                    <span class="info-value" id="redis-keys">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">С TTL</span>
+                    <span class="info-value" id="redis-expires">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h3 class="chart-title" onclick="toggleSection('settings')" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                <span>Настройки</span>
+                <span class="iconify" data-icon="pixelarticons:chevron-right" id="settings-icon" style="transition: transform 0.2s;"></span>
+            </h3>
+            <div id="settings-content" style="display: none; margin-top: 1rem;">
+                <div style="display: grid; gap: 1rem;">
+                    <div style="padding: 1rem; background: #f2f2ed; border-radius: 16px;">
+                        <div style="font-weight: 600; margin-bottom: 0.5rem;">Upstream API URL</div>
+                        <input type="text" id="upstream-url-input" style="width: 100%; padding: 0.5rem; border-radius: 12px; border: 2px solid #000; font-family: 'VCR OSD Mono', monospace; font-size: 16px; margin-bottom: 0.5rem;">
+                        <div style="font-size: 0.875rem; color: rgba(0,0,0,0.6);">Адрес API для проксирования запросов (OpenAI-совместимый)</div>
+                    </div>
+                    
+                    <div style="padding: 1rem; background: #f2f2ed; border-radius: 16px;">
+                        <div style="font-weight: 600; margin-bottom: 0.5rem;">API Key</div>
+                        <div style="position: relative;">
+                            <input type="password" id="api-key-input" style="width: 100%; padding: 0.5rem 3rem 0.5rem 0.5rem; border-radius: 12px; border: 2px solid #000; font-family: 'VCR OSD Mono', monospace; font-size: 16px; margin-bottom: 0.5rem;">
+                            <span onclick="toggleApiKey()" id="eye-icon" style="position: absolute; right: 0.75rem; top: 0.75rem; cursor: pointer;">
+                                <span class="iconify" data-icon="pixelarticons:eye-closed" style="font-size: 20px;"></span>
+                            </span>
+                        </div>
+                        <div style="font-size: 0.875rem; color: rgba(0,0,0,0.6);">Ключ доступа к upstream API</div>
+                    </div>
+                
+                    <div style="padding: 1rem; background: #f2f2ed; border-radius: 16px;">
+                        <div style="font-weight: 600; margin-bottom: 0.5rem;">Порог семантического кеша</div>
+                        <input type="number" id="threshold-input" step="0.01" min="0" max="1" style="width: 100%; padding: 0.5rem; border-radius: 12px; border: 2px solid #000; font-family: 'VCR OSD Mono', monospace; font-size: 16px; margin-bottom: 0.5rem;">
+                        <div style="font-size: 0.875rem; color: rgba(0,0,0,0.6);">Минимальная схожесть запросов (0.0-1.0). Чем выше — тем точнее совпадение. Рекомендуется 0.85-0.90</div>
+                    </div>
+                    
+                    <div style="padding: 1rem; background: #f2f2ed; border-radius: 16px;">
+                        <div style="font-weight: 600; margin-bottom: 0.5rem;">Время жизни кеша (TTL)</div>
+                        <input type="number" id="ttl-input" step="60" min="60" style="width: 100%; padding: 0.5rem; border-radius: 12px; border: 2px solid #000; font-family: 'VCR OSD Mono', monospace; font-size: 16px; margin-bottom: 0.5rem;">
+                        <div style="font-size: 0.875rem; color: rgba(0,0,0,0.6);">Секунды до автоудаления. Популярные запросы продлеваются автоматически. По умолчанию 3600 (1 час)</div>
+                    </div>
+                    
+                    <div style="padding: 1rem; background: #f2f2ed; border-radius: 16px;">
+                        <div style="font-weight: 600; margin-bottom: 0.5rem;">Семантический кеш</div>
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="semantic-input" style="width: 20px; height: 20px; cursor: pointer;">
+                            <span id="semantic-label" style="font-family: 'VCR OSD Mono', monospace; font-size: 16px;">ВКЛ</span>
+                        </label>
+                        <div style="font-size: 0.875rem; color: rgba(0,0,0,0.6);">Поиск похожих запросов через AI. Отключите для точного кеша (только exact match)</div>
+                    </div>
+                    
+                    <button onclick="saveConfig()" style="width: 100%; margin-top: 0.5rem;">
+                        <span class="iconify" data-icon="pixelarticons:save"></span>
+                        Сохранить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Модалки -->
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-icon">
+                <span class="iconify" data-icon="pixelarticons:alert" style="color: #de610d;"></span>
+            </div>
+            <div class="modal-title" id="confirm-title">Подтверждение</div>
+            <div class="modal-text" id="confirm-text">Вы уверены?</div>
+            <div class="modal-buttons">
+                <button onclick="confirmAction(false)" class="btn-danger">Отмена</button>
+                <button onclick="confirmAction(true)">Да</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="alert-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-icon" id="alert-icon">
+                <span class="iconify" data-icon="pixelarticons:check" style="color: #de610d;"></span>
+            </div>
+            <div class="modal-title" id="alert-title">Успешно</div>
+            <div class="modal-text" id="alert-text">Операция выполнена</div>
+            <div class="modal-buttons">
+                <button onclick="closeAlert()">OK</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = window.location.origin;
+        let confirmCallback = null;
+        
+        function showConfirm(title, text, callback) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-text').textContent = text;
+            document.getElementById('confirm-modal').style.display = 'flex';
+            confirmCallback = callback;
+        }
+        
+        function confirmAction(result) {
+            document.getElementById('confirm-modal').style.display = 'none';
+            if (confirmCallback) confirmCallback(result);
+            confirmCallback = null;
+        }
+        
+        function showAlert(title, text, isError = false) {
+            document.getElementById('alert-title').textContent = title;
+            document.getElementById('alert-text').textContent = text;
+            const icon = document.getElementById('alert-icon');
+            if (isError) {
+                icon.innerHTML = '<span class="iconify" data-icon="pixelarticons:close" style="color: #000;"></span>';
+            } else {
+                icon.innerHTML = '<span class="iconify" data-icon="pixelarticons:check" style="color: #de610d;"></span>';
+            }
+            document.getElementById('alert-modal').style.display = 'flex';
+        }
+        
+        function closeAlert() {
+            document.getElementById('alert-modal').style.display = 'none';
+        }
+        
+        async function fetchStats() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`${API_URL}/stats`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await response.json();
+                updateUI(data);
+                document.getElementById('status').textContent = 'Подключено';
+            } catch (error) {
+                document.getElementById('status').textContent = 'Ошибка';
+            }
+        }
+        
+        async function fetchConfig() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`${API_URL}/config`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await response.json();
+                document.getElementById('upstream-url-input').value = data.upstream_api_url || '';
+                document.getElementById('api-key-input').value = data.upstream_api_key || '';
+                document.getElementById('threshold-input').value = data.cache_threshold;
+                document.getElementById('ttl-input').value = data.cache_ttl;
+                document.getElementById('semantic-input').checked = data.enable_semantic;
+                document.getElementById('semantic-label').textContent = data.enable_semantic ? 'ВКЛ' : 'ВЫКЛ';
+            } catch (error) {
+                console.error('Failed to fetch config:', error);
+            }
+        }
+        
+        async function saveConfig() {
+            const config = {
+                upstream_api_url: document.getElementById('upstream-url-input').value,
+                upstream_api_key: document.getElementById('api-key-input').value,
+                cache_threshold: parseFloat(document.getElementById('threshold-input').value),
+                cache_ttl: parseInt(document.getElementById('ttl-input').value),
+                enable_semantic: document.getElementById('semantic-input').checked
+            };
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                await fetch(`${API_URL}/config`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify(config)
+                });
+                showAlert('Успешно', 'Настройки сохранены!');
+            } catch (error) {
+                showAlert('Ошибка', error.message, true);
+            }
+        }
+        
+        function toggleApiKey() {
+            const input = document.getElementById('api-key-input');
+            const icon = document.getElementById('eye-icon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.innerHTML = '<span class="iconify" data-icon="pixelarticons:eye" style="font-size: 20px;"></span>';
+            } else {
+                input.type = 'password';
+                icon.innerHTML = '<span class="iconify" data-icon="pixelarticons:eye-closed" style="font-size: 20px;"></span>';
+            }
+        }
+        
+        document.getElementById('semantic-input').addEventListener('change', (e) => {
+            document.getElementById('semantic-label').textContent = e.target.checked ? 'ВКЛ' : 'ВЫКЛ';
+        });
+        
+        function updateUI(data) {
+            document.getElementById('total-requests').textContent = data.total_requests.toLocaleString('ru-RU');
+            document.getElementById('hit-rate').textContent = `${(data.hit_rate * 100).toFixed(1)}%`;
+            document.getElementById('hit-rate-bar').style.width = `${data.hit_rate * 100}%`;
+            document.getElementById('tokens-saved').textContent = data.tokens_saved.toLocaleString('ru-RU');
+            document.getElementById('savings').textContent = `$${data.estimated_savings_usd.toFixed(2)}`;
+            document.getElementById('cache-hits').textContent = data.cache_hits.toLocaleString('ru-RU');
+            document.getElementById('cache-misses').textContent = data.cache_misses.toLocaleString('ru-RU');
+            
+            const avgTokens = data.cache_hits > 0 ? Math.round(data.tokens_saved / data.cache_hits) : 0;
+            document.getElementById('avg-tokens').textContent = `${avgTokens.toLocaleString('ru-RU')} токенов`;
+            
+            // Прогноз: если текущий hit_rate сохранится, сколько сэкономим за месяц
+            // Предполагаем 1000 запросов в день
+            const dailyRequests = 1000;
+            const monthlySavings = dailyRequests * 30 * data.hit_rate * avgTokens * 0.00003;
+            document.getElementById('monthly-savings').textContent = `$${monthlySavings.toFixed(2)}`;
+            
+            // Redis info
+            document.getElementById('redis-keys').textContent = (data.redis_keys || 0).toLocaleString('ru-RU');
+            document.getElementById('redis-expires').textContent = (data.redis_expires || 0).toLocaleString('ru-RU');
+        }
+        
+        async function clearCache() {
+            showConfirm('Очистка кеша', 'Вы уверены, что хотите очистить кеш?', async (confirmed) => {
+                if (!confirmed) return;
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    await fetch(`${API_URL}/cache/clear`, { 
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    showAlert('Успешно', 'Кеш успешно очищен');
+                    refreshStats();
+                } catch (error) {
+                    showAlert('Ошибка', error.message, true);
+                }
+            });
+        }
+        
+        function refreshStats() { fetchStats(); }
+        
+        function toggleSection(section) {
+            const content = document.getElementById(`${section}-content`);
+            const icon = document.getElementById(`${section}-icon`);
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = section === 'settings' ? 'block' : 'grid';
+                icon.style.transform = 'rotate(90deg)';
+            } else {
+                content.style.display = 'none';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+        
+        setInterval(fetchStats, 5000);
+        fetchStats();
+        fetchConfig();
+    </script>
+</body>
+</html>

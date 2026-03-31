@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  api:
+    build: ./api
+    container_name: ai-cache-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./api:/app
+      - ./dashboard.html:/app/dashboard.html
+      - ./setup.html:/app/setup.html
+      - ./login.html:/app/login.html
+      - model-cache:/root/.cache
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-cache-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  redis-data:
+  model-cache:
