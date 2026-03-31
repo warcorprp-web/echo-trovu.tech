@@ -35,12 +35,11 @@ Self-hosted прокси-кеш для OpenAI-совместимых API с се
 # Скачайте конфигурацию
 wget https://raw.githubusercontent.com/warcorprp-web/echo-trovu.tech/main/docker-compose.yml
 
-# Запустите (с выводом логов)
+# Запустите
 docker compose up
 
-# После появления сообщения "Панель управления доступна" нажмите Ctrl+C
-# Запустите в фоне
-docker compose up -d
+# После появления адресов панели нажмите Ctrl+C
+# Контейнер продолжит работать в фоне
 ```
 
 **Вы увидите:**
