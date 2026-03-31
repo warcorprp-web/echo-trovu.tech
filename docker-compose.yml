@@ -11,6 +11,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - SERVER_IP=${SERVER_IP:-your-server-ip}
     depends_on:
       - redis
     restart: unless-stopped
@@ -20,6 +21,7 @@ services:
       - ./setup.html:/app/setup.html
       - ./login.html:/app/login.html
       - model-cache:/root/.cache
+      - faiss-data:/app/data
 
   redis:
     image: redis:7-alpine
@@ -39,3 +41,4 @@ services:
 volumes:
   redis-data:
   model-cache:
+  faiss-data:

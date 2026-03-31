@@ -13,10 +13,15 @@ import hashlib
 import time
 import json
 
-logging.basicConfig(level=logging.INFO)
+# Настройка логирования - только ошибки от библиотек
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(message)s'
+)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-app = FastAPI(title="AI Cache", version="0.1.0")
+app = FastAPI(title="ECHO", version="1.0.0", docs_url=None, redoc_url=None)
 
 # CORS для dashboard
 app.add_middleware(
@@ -30,33 +35,71 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Загрузка модели при старте"""
-    logger.info("=" * 60)
-    logger.info("🚀 ECHO - Система кеширования AI-ответов")
-    logger.info("=" * 60)
-    logger.info("Загрузка модели эмбеддингов...")
+    import os
+    import urllib.request
+    
+    # Красивый баннер
+    print("\n" + "=" * 70)
+    print("███████╗ ██████╗██╗  ██╗ ██████╗ ")
+    print("██╔════╝██╔════╝██║  ██║██╔═══██╗")
+    print("█████╗  ██║     ███████║██║   ██║")
+    print("██╔══╝  ██║     ██╔══██║██║   ██║")
+    print("███████╗╚██████╗██║  ██║╚██████╔╝")
+    print("╚══════╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝ ")
+    print("")
+    print("Система кеширования AI-ответов")
+    print("https://trovu.tech/echo")
+    print("")
+    print("(c) 2026 Trovu.Tech - All Rights Reserved")
+    print("=" * 70)
+    print("")
+    
+    # Загрузка без лишних логов
+    import logging
+    logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+    
+    print("[*] Загрузка модели эмбеддингов...")
     embedding_service.load_model()
-    logger.info("✓ Модель загружена!")
-    logger.info("")
+    print("[+] Модель загружена")
+    print("")
+    
+    # Загружаем Faiss индекс из Redis
+    print("[*] Загрузка Faiss индекса...")
+    cache_service._load_faiss_index()
+    print("[+] Faiss индекс загружен")
+    print("")
+    
+    # Определяем внешний IP
+    server_ip = os.getenv('SERVER_IP')
+    if not server_ip:
+        try:
+            server_ip = urllib.request.urlopen('https://api.ipify.org', timeout=2).read().decode('utf8')
+        except:
+            server_ip = None
     
     # Проверяем setup
     setup_completed = cache_service.redis_client.get("setup_completed")
-    if not setup_completed:
-        logger.info("⚠️  ТРЕБУЕТСЯ ПЕРВОНАЧАЛЬНАЯ НАСТРОЙКА")
-        logger.info("")
-        logger.info("📍 Откройте в браузере:")
-        logger.info("   • Локально:  http://localhost:8000")
-        logger.info("   • По сети:   http://<ваш-ip>:8000")
-        logger.info("")
-        logger.info("Следуйте инструкциям мастера настройки (3 шага)")
-    else:
-        logger.info("✓ Настройка завершена")
-        logger.info("")
-        logger.info("📍 Панель управления доступна:")
-        logger.info("   • Локально:  http://localhost:8000")
-        logger.info("   • По сети:   http://<ваш-ip>:8000")
     
-    logger.info("")
-    logger.info("=" * 60)
+    if not setup_completed:
+        print("[!] ТРЕБУЕТСЯ ПЕРВОНАЧАЛЬНАЯ НАСТРОЙКА")
+        print("")
+        print("Откройте в браузере:")
+        print("  -> http://localhost:8000")
+        if server_ip:
+            print(f"  -> http://{server_ip}:8000")
+        print("")
+        print("Следуйте инструкциям мастера настройки (3 шага)")
+    else:
+        print("[+] Настройка завершена")
+        print("")
+        print("Панель управления доступна:")
+        print("  -> http://localhost:8000")
+        if server_ip:
+            print(f"  -> http://{server_ip}:8000")
+    
+    print("")
+    print("=" * 70)
+    print("")
 
 @app.get("/")
 async def root(request: Request):
