@@ -1,7 +1,8 @@
 import redis
 import json
 import hashlib
-from typing import Optional, Dict, Any
+import re
+from typing import Optional, Dict, Any, List
 from config import settings
 from embeddings import embedding_service
 import numpy as np
@@ -15,6 +16,42 @@ class CacheService:
         )
         # Загружаем статистику из Redis
         self._load_stats()
+    
+    def _normalize_text(self, text: str) -> str:
+        """Нормализация текста для лучшего кеширования"""
+        # Lowercase
+        text = text.lower()
+        # Убираем лишние пробелы
+        text = re.sub(r'\s+', ' ', text).strip()
+        # Убираем пунктуацию в конце
+        text = text.rstrip('.,!?;:')
+        return text
+    
+    def _extract_user_content(self, messages: List[Dict]) -> str:
+        """Извлекает только user messages для кеширования"""
+        user_messages = []
+        for msg in messages:
+            if msg.get('role') == 'user':
+                content = msg.get('content', '')
+                user_messages.append(self._normalize_text(content))
+        return ' '.join(user_messages)
+    
+    def _should_cache(self, request_data: Dict) -> bool:
+        """Проверяет, нужно ли кешировать запрос"""
+        # Не кешируем если temperature > 1.0 (креативные запросы)
+        temperature = request_data.get('temperature', 0.0)
+        if temperature > 1.0:
+            return False
+        
+        # Streaming кешируем, но возвращаем как non-stream
+        # if request_data.get('stream', False):
+        #     return False
+        
+        # Не кешируем function calling
+        if 'functions' in request_data or 'tools' in request_data:
+            return False
+        
+        return True
     
     def _load_stats(self):
         """Загрузка статистики из Redis"""
@@ -34,9 +71,10 @@ class CacheService:
         self.redis_client.set("stats", json.dumps(self.stats))
     
     def _get_cache_key(self, messages: list) -> str:
-        """Генерация ключа для exact match"""
-        content = json.dumps(messages, sort_keys=True)
-        return f"exact:{hashlib.md5(content.encode()).hexdigest()}"
+        """Генерация ключа для exact match на основе нормализованного контента"""
+        # Используем нормализованный user content
+        normalized_content = self._extract_user_content(messages)
+        return f"exact:{hashlib.md5(normalized_content.encode()).hexdigest()}"
     
     def _get_embedding_key(self, query: str) -> str:
         """Ключ для хранения embedding"""
@@ -52,59 +90,109 @@ class CacheService:
             return json.loads(cached)
         return None
     
-    def get_semantic_match(self, query: str) -> Optional[Dict[Any, Any]]:
-        """Проверка semantic кеша"""
+    def _check_cache_health(self, emb_key: str, response_key: str) -> bool:
+        """Проверка консистентности кеша"""
+        try:
+            # Проверяем что оба ключа существуют
+            emb_exists = self.redis_client.exists(emb_key)
+            response_exists = self.redis_client.exists(response_key)
+            
+            if not emb_exists or not response_exists:
+                # Удаляем битые записи
+                if emb_exists:
+                    self.redis_client.delete(emb_key)
+                if response_exists:
+                    self.redis_client.delete(response_key)
+                return False
+            
+            return True
+        except Exception:
+            return False
+    
+    def get_semantic_match(self, query: str, temperature: float = 0.0, top_k: int = 5) -> Optional[Dict[Any, Any]]:
+        """Проверка semantic кеша с health check и temperature softmax (оптимизированный Redis)"""
         if not settings.enable_semantic:
             return None
         
+        # Нормализуем запрос
+        normalized_query = self._normalize_text(query)
+        
         # Получаем embedding запроса
-        query_emb = embedding_service.get_embedding(query)
+        query_emb = embedding_service.get_embedding(normalized_query)
         
-        # Получаем список всех embeddings
-        emb_keys = list(self.redis_client.keys("emb:*"))
+        # Получаем список всех embeddings (оптимизировано с SCAN)
+        candidates = []
+        cursor = 0
         
-        if not emb_keys:
-            return None
-        
-        best_similarity = 0.0
-        best_response = None
-        best_query = None
-        
-        # Ищем наиболее похожий запрос
-        for key in emb_keys:
-            stored_data = self.redis_client.get(key)
-            if stored_data:
-                try:
-                    data = json.loads(stored_data)
-                    stored_emb = np.array(data["embedding"])
-                    similarity = embedding_service.similarity(query_emb, stored_emb)
-                    
-                    if similarity > best_similarity:
-                        best_similarity = similarity
+        while True:
+            cursor, keys = self.redis_client.scan(cursor, match="emb:*", count=100)
+            
+            for key in keys:
+                stored_data = self.redis_client.get(key)
+                if stored_data:
+                    try:
+                        data = json.loads(stored_data)
+                        response_key = data["response_key"]
+                        
+                        # Health check
+                        if not self._check_cache_health(key, response_key):
+                            continue
+                        
+                        stored_emb = np.array(data["embedding"])
+                        similarity = embedding_service.similarity(query_emb, stored_emb)
+                        
                         if similarity >= settings.cache_threshold:
-                            response_key = data["response_key"]
                             cached_response = self.redis_client.get(response_key)
                             if cached_response:
-                                best_response = json.loads(cached_response)
-                                best_query = data.get("query", "")
-                                # Обновляем TTL для найденного кеша
-                                self.redis_client.expire(response_key, settings.cache_ttl)
-                                self.redis_client.expire(key, settings.cache_ttl)
-                except Exception as e:
-                    continue
+                                candidates.append({
+                                    'similarity': similarity,
+                                    'response': json.loads(cached_response),
+                                    'query': data.get("query", ""),
+                                    'response_key': response_key,
+                                    'emb_key': key
+                                })
+                                
+                                # Ранний выход если нашли top_k кандидатов
+                                if len(candidates) >= top_k * 2:
+                                    break
+                    except Exception as e:
+                        continue
+            
+            if cursor == 0 or len(candidates) >= top_k * 2:
+                break
         
-        # Логируем лучший результат
+        if not candidates:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"No semantic matches found (threshold: {settings.cache_threshold})")
+            return None
+        
+        # Сортируем и берем топ
+        candidates.sort(key=lambda x: x['similarity'], reverse=True)
+        candidates = candidates[:top_k]
+        
+        # Temperature softmax для выбора
+        if temperature > 0 and len(candidates) > 1:
+            scores = np.array([c['similarity'] for c in candidates])
+            exp_scores = np.exp(scores / temperature)
+            probabilities = exp_scores / exp_scores.sum()
+            chosen_idx = np.random.choice(len(candidates), p=probabilities)
+            chosen = candidates[chosen_idx]
+        else:
+            chosen = candidates[0]
+        
+        # Обновляем TTL
+        self.redis_client.expire(chosen['response_key'], settings.cache_ttl)
+        self.redis_client.expire(chosen['emb_key'], settings.cache_ttl)
+        
         import logging
         logger = logging.getLogger(__name__)
-        if best_query:
-            logger.info(f"Best match: '{best_query}' (similarity: {best_similarity:.4f})")
-        else:
-            logger.info(f"Best similarity: {best_similarity:.4f} < threshold {settings.cache_threshold}")
+        logger.info(f"Semantic match: '{chosen['query']}' (similarity: {chosen['similarity']:.4f}, temp: {temperature})")
         
-        return best_response
+        return chosen['response']
     
     def set_cache(self, messages: list, response: Dict[Any, Any]):
-        """Сохранение в кеш"""
+        """Сохранение в кеш с нормализацией"""
         # Exact match
         exact_key = self._get_cache_key(messages)
         self.redis_client.setex(
@@ -115,17 +203,19 @@ class CacheService:
         
         # Semantic cache
         if settings.enable_semantic and messages:
-            last_message = messages[-1].get("content", "")
-            if last_message:
-                query_emb = embedding_service.get_embedding(last_message)
-                emb_key = self._get_embedding_key(last_message)
+            # Извлекаем и нормализуем user content
+            user_content = self._extract_user_content(messages)
+            if user_content:
+                query_emb = embedding_service.get_embedding(user_content)
+                emb_key = self._get_embedding_key(user_content)
                 
                 emb_data = {
                     "embedding": query_emb.tolist(),
                     "response_key": exact_key,
-                    "query": last_message
+                    "query": user_content
                 }
                 
+                # Сохраняем в Redis
                 self.redis_client.setex(
                     emb_key,
                     settings.cache_ttl,

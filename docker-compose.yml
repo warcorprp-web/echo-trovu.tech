@@ -29,7 +29,12 @@ services:
     volumes:
       - redis-data:/data
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --maxmemory-samples 5
 
 volumes:
   redis-data:

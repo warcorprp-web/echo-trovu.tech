@@ -9,6 +9,9 @@ from cache import cache_service
 from embeddings import embedding_service
 import logging
 from pathlib import Path
+import hashlib
+import time
+import json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -250,67 +253,148 @@ async def chat_completions(request: Request):
         cache_service.stats["total_requests"] += 1
         cache_service._save_stats()
         
-        # Проверка exact match
-        cached_response = cache_service.get_exact_match(messages)
-        if cached_response:
-            cache_service.stats["cache_hits"] += 1
-            tokens = cached_response.get("usage", {}).get("total_tokens", 0)
-            cache_service.stats["tokens_saved"] += tokens
+        # Проверяем, нужно ли кешировать этот запрос
+        should_cache = cache_service._should_cache(body)
+        
+        if not should_cache:
+            logger.info(f"Cache SKIP - temperature={body.get('temperature', 0.0)}, stream={body.get('stream', False)}")
+            # Пропускаем кеш, сразу идем к API
+            cache_service.stats["cache_misses"] += 1
             cache_service._save_stats()
-            logger.info(f"Cache HIT (exact) - saved {tokens} tokens")
-            return JSONResponse(content=cached_response)
-        
-        # Проверка semantic match
-        if messages:
-            last_message = messages[-1].get("content", "")
-            if last_message:
-                cached_response = cache_service.get_semantic_match(last_message)
-                if cached_response:
-                    cache_service.stats["cache_hits"] += 1
-                    tokens = cached_response.get("usage", {}).get("total_tokens", 0)
-                    cache_service.stats["tokens_saved"] += tokens
-                    cache_service._save_stats()
-                    logger.info(f"Cache HIT (semantic) - saved {tokens} tokens")
-                    return JSONResponse(content=cached_response)
-                else:
-                    logger.info(f"Semantic search: no match found (threshold: {settings.cache_threshold})")
-        
-        # Cache miss - запрос к upstream API
-        cache_service.stats["cache_misses"] += 1
-        cache_service._save_stats()
-        logger.info("Cache MISS - forwarding to upstream API")
+        else:
+            # Проверка exact match
+            cached_response = cache_service.get_exact_match(messages)
+            if cached_response:
+                cache_service.stats["cache_hits"] += 1
+                tokens = cached_response.get("usage", {}).get("total_tokens", 0)
+                cache_service.stats["tokens_saved"] += tokens
+                cache_service._save_stats()
+                logger.info(f"Cache HIT (exact) - saved {tokens} tokens")
+                return JSONResponse(content=cached_response)
+            
+            # Проверка semantic match
+            if messages:
+                user_content = cache_service._extract_user_content(messages)
+                if user_content:
+                    temperature = body.get('temperature', 0.0)
+                    cached_response = cache_service.get_semantic_match(user_content, temperature=temperature)
+                    if cached_response:
+                        cache_service.stats["cache_hits"] += 1
+                        tokens = cached_response.get("usage", {}).get("total_tokens", 0)
+                        cache_service.stats["tokens_saved"] += tokens
+                        cache_service._save_stats()
+                        logger.info(f"Cache HIT (semantic) - saved {tokens} tokens")
+                        return JSONResponse(content=cached_response)
+                    else:
+                        logger.info(f"Semantic search: no match found (threshold: {settings.cache_threshold})")
+            
+            # Cache miss
+            cache_service.stats["cache_misses"] += 1
+            cache_service._save_stats()
+            logger.info("Cache MISS - forwarding to upstream API")
         
         # Получаем Authorization header
         auth_header = request.headers.get("Authorization")
         if not auth_header:
             raise HTTPException(status_code=401, detail="Authorization header required")
         
+        # Проверяем streaming
+        is_stream = body.get('stream', False)
+        
         # Прокси запрос
         async with httpx.AsyncClient(timeout=60.0) as client:
             upstream_url = f"{settings.upstream_api_url}/chat/completions"
             
-            response = await client.post(
-                upstream_url,
-                json=body,
-                headers={
-                    "Authorization": auth_header,
-                    "Content-Type": "application/json"
-                }
-            )
+            if is_stream:
+                # Streaming: собираем весь ответ, кешируем, возвращаем non-stream
+                logger.info("Streaming request - will collect and cache")
+                
+                # Отправляем как stream к upstream
+                async with client.stream(
+                    "POST",
+                    upstream_url,
+                    json=body,
+                    headers={
+                        "Authorization": auth_header,
+                        "Content-Type": "application/json"
+                    }
+                ) as stream_response:
+                    if stream_response.status_code != 200:
+                        logger.error(f"Upstream API error: {stream_response.status_code}")
+                        raise HTTPException(status_code=stream_response.status_code, detail="Upstream error")
+                    
+                    # Собираем все chunks
+                    full_content = ""
+                    async for chunk in stream_response.aiter_text():
+                        if chunk.strip():
+                            # Парсим SSE
+                            for line in chunk.split('\n'):
+                                if line.startswith('data: '):
+                                    data_str = line[6:]
+                                    if data_str.strip() == '[DONE]':
+                                        continue
+                                    try:
+                                        chunk_data = json.loads(data_str)
+                                        delta = chunk_data.get('choices', [{}])[0].get('delta', {})
+                                        content = delta.get('content', '')
+                                        if content:
+                                            full_content += content
+                                    except:
+                                        continue
+                    
+                    # Создаем non-stream ответ
+                    response_data = {
+                        "id": f"chatcmpl-{hashlib.md5(full_content.encode()).hexdigest()[:8]}",
+                        "object": "chat.completion",
+                        "created": int(time.time()),
+                        "model": body.get("model", "gpt-3.5-turbo"),
+                        "choices": [{
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": full_content
+                            },
+                            "finish_reason": "stop"
+                        }],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": len(full_content.split()),
+                            "total_tokens": len(full_content.split())
+                        }
+                    }
+                    
+                    # Кешируем
+                    if should_cache:
+                        cache_service.set_cache(messages, response_data)
+                        logger.info(f"Cached streaming response: {len(full_content)} chars")
+                    
+                    return JSONResponse(content=response_data)
             
-            if response.status_code != 200:
-                logger.error(f"Upstream API error: {response.status_code} - {response.text}")
-                raise HTTPException(status_code=response.status_code, detail=response.text)
-            
-            response_data = response.json()
-            
-            # Сохраняем в кеш
-            cache_service.set_cache(messages, response_data)
-            
-            tokens = response_data.get("usage", {}).get("total_tokens", 0)
-            logger.info(f"Response from upstream - {tokens} tokens")
-            
-            return JSONResponse(content=response_data)
+            else:
+                # Non-streaming: как обычно
+                response = await client.post(
+                    upstream_url,
+                    json=body,
+                    headers={
+                        "Authorization": auth_header,
+                        "Content-Type": "application/json"
+                    }
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Upstream API error: {response.status_code} - {response.text}")
+                    raise HTTPException(status_code=response.status_code, detail=response.text)
+                
+                response_data = response.json()
+                
+                # Сохраняем в кеш только если should_cache
+                if should_cache:
+                    cache_service.set_cache(messages, response_data)
+                
+                tokens = response_data.get("usage", {}).get("total_tokens", 0)
+                logger.info(f"Response from upstream - {tokens} tokens")
+                
+                return JSONResponse(content=response_data)
     
     except Exception as e:
         logger.error(f"Error: {str(e)}")
