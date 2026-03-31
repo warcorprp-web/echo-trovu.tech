@@ -258,12 +258,16 @@ async def get_config(request: Request):
 
 @app.post("/config")
 async def update_config(request: Request):
-    """Обновление настроек"""
     check_auth(request)
     body = await request.json()
     
     if "upstream_api_url" in body:
-        settings.upstream_api_url = body["upstream_api_url"]
+        upstream_url = body["upstream_api_url"]
+        if upstream_url.endswith("/chat/completions"):
+            upstream_url = upstream_url[:-len("/chat/completions")]
+        if upstream_url.endswith("/completions"):
+            upstream_url = upstream_url[:-len("/completions")]
+        settings.upstream_api_url = upstream_url
     if "upstream_api_key" in body:
         settings.upstream_api_key = body["upstream_api_key"]
     if "cache_threshold" in body:
