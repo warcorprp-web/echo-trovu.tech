@@ -93,7 +93,7 @@ async def startup_event():
     print("")
     print("=" * 70)
     print("")
-    print("Нажмите Ctrl+C для выхода (контейнер продолжит работать)")
+    print("Нажмите D для detach (контейнер продолжит работать)")
     print("")
 
 @app.get("/")

@@ -38,7 +38,7 @@ wget https://raw.githubusercontent.com/warcorprp-web/echo-trovu.tech/main/docker
 # Запустите
 docker compose up
 
-# После появления адресов панели нажмите Ctrl+C
+# После появления адресов панели нажмите D (detach)
 # Контейнер продолжит работать в фоне
 ```
 
