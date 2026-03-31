@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Настройка ECHO — trovu.tech</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path fill='%23de610d' d='M30.47 18.28V7.62h-1.52v9.14h-1.52v-1.52H25.9v12.19h1.53V25.9h3.04v-1.52H32v-6.1zm-6.09-6.09h1.52v3.05h-1.52ZM6.09 27.43v1.52h1.53v1.53h1.52v-1.53h13.71v1.53h1.53v-1.53h1.52v-1.52zm16.76-9.15h1.53v3.05h-1.53Zm0-7.61h1.53v1.52h-1.53Zm-3.04 6.09h3.04v1.52h-3.04ZM9.14 30.48h13.71V32H9.14Zm10.67-9.15h3.04v1.53h-3.04Zm-1.53-3.05h1.53v3.05h-1.53Zm0-16.76h1.53v1.53h-1.53Zm-4.57 22.86h4.57v1.52h-4.57Zm0-24.38h4.57v1.52h-4.57Zm-1.52 18.28h1.52v3.05h-1.52Zm0-16.76h1.52v1.53h-1.52ZM9.14 16.76h3.05v1.52H9.14Zm13.71-6.09V9.14h-6.09V4.57h1.52V3.05h-4.57v1.52h1.52v4.57H9.14v1.53z'/><path fill='%23de610d' d='M9.14 21.33h3.05v1.53H9.14Zm-1.52-3.05h1.52v3.05H7.62Zm0-7.61h1.52v1.52H7.62Zm-1.53 1.52h1.53v3.05H6.09Zm0 3.05H4.57v1.52H3.04V7.62H1.52v10.66H0v6.1h1.52v1.52h3.05v1.53h1.52z'/></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://code.iconify.design/3/3.1.0/iconify.min.js"></script>
+    <style>
+        @font-face {
+            font-family: 'VCR OSD Mono';
+            src: url('https://trovu.tech/VCROSDMono[NolivantNTEdit]-Regular.ttf') format('truetype');
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Manrope', sans-serif;
+            background: #f2f2ed;
+            color: #000;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        .setup-container {
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        .setup-card {
+            background: #fff;
+            border-radius: 24px;
+            padding: 3rem;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .logo-icon {
+            font-size: 4rem;
+            color: #de610d;
+            margin-bottom: 1rem;
+        }
+        
+        h1 {
+            font-family: 'VCR OSD Mono', monospace;
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: rgba(0, 0, 0, 0.7);
+            margin-bottom: 2rem;
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .step-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #f2f2ed;
+            transition: background 0.3s;
+        }
+        
+        .step-dot.active { background: #de610d; }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        input[type="text"],
+        input[type="password"],
+        input[type="number"] {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 12px;
+            border: 2px solid #000;
+            font-family: 'VCR OSD Mono', monospace;
+            font-size: 16px;
+        }
+        
+        .help-text {
+            font-size: 0.875rem;
+            color: rgba(0, 0, 0, 0.6);
+            margin-top: 0.5rem;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        input[type="checkbox"] {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        
+        button {
+            flex: 1;
+            font-family: 'VCR OSD Mono', monospace;
+            padding: 1rem;
+            border-radius: 24px;
+            border: 2px solid #de610d;
+            background: transparent;
+            color: #000;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        button:hover { background: #de610d; color: #fff; }
+        button.primary { background: #de610d; color: #fff; }
+        button.primary:hover { background: #000; border-color: #000; }
+        
+        .step { display: none; }
+        .step.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <div class="setup-card">
+            <div class="logo">
+                <div class="logo-icon">
+                    <span class="iconify" data-icon="streamline-pixel:technology-robot-ai"></span>
+                </div>
+                <h1>ECHO</h1>
+                <p class="subtitle">Первоначальная настройка</p>
+            </div>
+            
+            <div class="step-indicator">
+                <div class="step-dot active" id="dot-1"></div>
+                <div class="step-dot" id="dot-2"></div>
+                <div class="step-dot" id="dot-3"></div>
+            </div>
+            
+            <!-- Шаг 1: API настройки -->
+            <div class="step active" id="step-1">
+                <div class="form-group">
+                    <label>Upstream API URL</label>
+                    <input type="text" id="api-url" placeholder="https://api.openai.com/v1">
+                    <div class="help-text">Адрес OpenAI-совместимого API</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="password" id="api-key" placeholder="sk-...">
+                    <div class="help-text">Ключ доступа к API</div>
+                </div>
+                
+                <div class="buttons">
+                    <button class="primary" onclick="nextStep(2)">Далее →</button>
+                </div>
+            </div>
+            
+            <!-- Шаг 2: Настройки кеша -->
+            <div class="step" id="step-2">
+                <div class="form-group">
+                    <label>Порог семантического кеша</label>
+                    <input type="number" id="threshold" value="0.88" step="0.01" min="0" max="1">
+                    <div class="help-text">Рекомендуется 0.85-0.90 для баланса точности</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Время жизни кеша (секунды)</label>
+                    <input type="number" id="ttl" value="3600" step="60" min="60">
+                    <div class="help-text">По умолчанию 3600 (1 час)</div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="semantic" checked>
+                        <label style="margin: 0;">Включить семантический поиск</label>
+                    </div>
+                    <div class="help-text">Поиск похожих запросов через AI</div>
+                </div>
+                
+                <div class="buttons">
+                    <button onclick="prevStep(1)">← Назад</button>
+                    <button class="primary" onclick="nextStep(3)">Далее →</button>
+                </div>
+            </div>
+            
+            <!-- Шаг 3: Безопасность -->
+            <div class="step" id="step-3">
+                <div class="form-group">
+                    <label>Логин для панели</label>
+                    <input type="text" id="username" placeholder="admin">
+                    <div class="help-text">Имя пользователя для входа в dashboard</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Пароль</label>
+                    <input type="password" id="password" placeholder="••••••••">
+                    <div class="help-text">Минимум 6 символов</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Повторите пароль</label>
+                    <input type="password" id="password-confirm" placeholder="••••••••">
+                </div>
+                
+                <div class="buttons">
+                    <button onclick="prevStep(2)">← Назад</button>
+                    <button class="primary" onclick="completeSetup()">Завершить настройку</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = window.location.origin;
+        
+        function nextStep(step) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.step-dot').forEach(d => d.classList.remove('active'));
+            
+            document.getElementById(`step-${step}`).classList.add('active');
+            for (let i = 1; i <= step; i++) {
+                document.getElementById(`dot-${i}`).classList.add('active');
+            }
+        }
+        
+        function prevStep(step) {
+            nextStep(step);
+        }
+        
+        async function completeSetup() {
+            const password = document.getElementById('password').value;
+            const passwordConfirm = document.getElementById('password-confirm').value;
+            
+            if (password !== passwordConfirm) {
+                alert('Пароли не совпадают!');
+                return;
+            }
+            
+            if (password.length < 6) {
+                alert('Пароль должен быть минимум 6 символов!');
+                return;
+            }
+            
+            const config = {
+                upstream_api_url: document.getElementById('api-url').value,
+                upstream_api_key: document.getElementById('api-key').value,
+                cache_threshold: parseFloat(document.getElementById('threshold').value),
+                cache_ttl: parseInt(document.getElementById('ttl').value),
+                enable_semantic: document.getElementById('semantic').checked,
+                username: document.getElementById('username').value,
+                password: password
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/setup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/login';
+                } else {
+                    alert('Ошибка настройки!');
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -27,8 +27,13 @@ wget https://raw.githubusercontent.com/warcorprp-web/echo-trovu.tech/main/docker
 # Запустите
 docker compose up -d
 
-# Проверьте логи
+# Дождитесь загрузки (10-15 секунд) и посмотрите логи
 docker logs echo-api
+
+# Или запустите с выводом логов сразу
+docker compose up
+# После появления сообщения "Панель управления доступна" нажмите Ctrl+C
+# Затем запустите в фоне: docker compose up -d
 ```
 
 ### Вариант 2: Только Docker
@@ -44,6 +49,9 @@ docker run -d \
   --link echo-redis \
   --name echo-api \
   trovutech/echo:latest
+
+# Посмотрите логи
+docker logs -f echo-api
 ```
 
 ### Вариант 3: Разработка (из исходников)
@@ -51,7 +59,7 @@ docker run -d \
 ```bash
 git clone https://github.com/warcorprp-web/echo-trovu.tech.git
 cd echo-trovu.tech
-docker compose up -d
+docker compose up
 ```
 
 Откройте браузер: `http://localhost:8000` или `http://<ваш-ip>:8000`
