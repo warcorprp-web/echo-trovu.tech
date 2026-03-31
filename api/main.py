@@ -150,8 +150,15 @@ async def setup(request: Request):
     """Первоначальная настройка"""
     body = await request.json()
     
+    # Нормализуем URL (убираем /chat/completions если есть)
+    upstream_url = body.get("upstream_api_url", settings.upstream_api_url)
+    if upstream_url.endswith("/chat/completions"):
+        upstream_url = upstream_url[:-len("/chat/completions")]
+    if upstream_url.endswith("/completions"):
+        upstream_url = upstream_url[:-len("/completions")]
+    
     # Сохраняем настройки API
-    settings.upstream_api_url = body.get("upstream_api_url", settings.upstream_api_url)
+    settings.upstream_api_url = upstream_url
     settings.upstream_api_key = body.get("upstream_api_key", "")
     settings.cache_threshold = float(body.get("cache_threshold", 0.88))
     settings.cache_ttl = int(body.get("cache_ttl", 3600))
